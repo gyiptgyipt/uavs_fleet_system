@@ -1,0 +1,11 @@
+uavs:
+  - id: 1
+    initial_position: [0, 0, 0]
+    setpoints:
+      - [0, 0, 5, 0]
+      - [10, 0, 5, 0]
+  - id: 2
+    initial_position: [5, 5, 0]
+    setpoints:
+      - [5, 5, 5, 0]
+      - [15, 5, 5, 0]

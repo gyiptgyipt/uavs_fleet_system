@@ -16,7 +16,7 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 
 # Qt5
-find_package(Qt5 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt5 REQUIRED COMPONENTS Core Widgets Network)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -40,6 +40,7 @@ target_include_directories(uav_gui PRIVATE
 target_link_libraries(uav_gui
   Qt5::Core
   Qt5::Widgets
+  Qt5::Network
 )
 
 ament_target_dependencies(uav_gui

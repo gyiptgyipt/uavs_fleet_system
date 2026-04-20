@@ -5,6 +5,10 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -17,13 +21,20 @@ find_package(Qt5 REQUIRED COMPONENTS Core Widgets)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 include_directories(include)
 
 add_executable(uav_gui
+  include/mainwindow.hpp
+  include/uav_control_node.hpp
   src/main.cpp
   src/mainwindow.cpp
   src/uav_control_node.cpp
+)
+
+target_include_directories(uav_gui PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(uav_gui

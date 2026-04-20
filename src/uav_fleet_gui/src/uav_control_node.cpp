@@ -1,4 +1,5 @@
 #include "uav_control_node.hpp"
+#include <QString>
 
 UAVControlNode::UAVControlNode()
     : Node("uav_control_node") {
@@ -18,6 +19,7 @@ void UAVControlNode::armVehicle(int vehicle_id) {
 }
 
 void UAVControlNode::sendSetpoint(int vehicle_id, double x, double y, double z, double yaw) {
+    (void)yaw;
     geometry_msgs::msg::PoseStamped msg;
     msg.header.stamp = this->get_clock()->now();
     msg.pose.position.x = x;

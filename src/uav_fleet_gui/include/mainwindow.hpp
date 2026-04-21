@@ -1,22 +1,21 @@
 #ifndef UAV_FLEET_GUI_MAINWINDOW_HPP
 #define UAV_FLEET_GUI_MAINWINDOW_HPP
 
-#include <QComboBox>
 #include <QGridLayout>
 #include <QHash>
-#include <QLabel>
-#include <QLineEdit>
 #include <QMainWindow>
 #include <QNetworkAccessManager>
 #include <QPixmap>
 #include <QPushButton>
-#include <QScrollArea>
-#include <QTextEdit>
 #include <QThread>
 #include <QTimer>
-#include <QWidget>
 
+class GISMapWidget;
 class UAVControlNode;
+
+namespace Ui {
+class UAVFleetGUI;
+}
 
 class SimulationThread : public QThread {
     Q_OBJECT
@@ -43,6 +42,7 @@ private slots:
     void armUAVs();
     void sendSetpoints();
     void setupUAVs();
+    void removeUAV();
     void startMission();
     void clearLogs();
     void saveLogs();
@@ -58,29 +58,14 @@ private:
     void requestMapPreview(QPushButton* map_button, int uav_id);
     void selectUAV(int uav_id);
 
+    Ui::UAVFleetGUI* ui_;
+    GISMapWidget* interactive_map_;
     UAVControlNode* node_;
     SimulationThread* sim_thread_;
 
     QWidget* uav_grid_container_;
     QGridLayout* uav_grid_layout_;
 
-    QPushButton* setup_uavs_btn_;
-    QPushButton* start_sim_btn_;
-    QPushButton* arm_btn_;
-    QPushButton* setpoint_btn_;
-
-    QComboBox* mission_type_;
-    QLineEdit* altitude_input_;
-    QLineEdit* speed_input_;
-
-    QLabel* fleet_count_label_;
-    QLabel* selected_uav_telemetry_;
-    QLabel* position_label_;
-    QLabel* velocity_label_;
-    QLabel* battery_label_;
-    QLabel* gps_label_;
-
-    QTextEdit* output_text_;
     QTimer* telemetry_timer_;
     QNetworkAccessManager* map_network_manager_;
     QHash<int, QPixmap> map_preview_cache_;

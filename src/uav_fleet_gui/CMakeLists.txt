@@ -22,15 +22,21 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+set(CMAKE_AUTOUIC_SEARCH_PATHS
+  ${CMAKE_CURRENT_SOURCE_DIR}/ui
+)
 
 include_directories(include)
 
 add_executable(uav_gui
+  include/gis_map_widget.hpp
   include/mainwindow.hpp
   include/uav_control_node.hpp
+  src/gis_map_widget.cpp
   src/main.cpp
   src/mainwindow.cpp
   src/uav_control_node.cpp
+  ui/mainwindow.ui
 )
 
 target_include_directories(uav_gui PRIVATE

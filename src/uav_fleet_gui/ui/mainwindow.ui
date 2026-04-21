@@ -1,0 +1,491 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>UAVFleetGUI</class>
+ <widget class="QMainWindow" name="UAVFleetGUI">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1600</width>
+    <height>910</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>UAV Fleet</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="rootLayout">
+    <property name="leftMargin">
+     <number>20</number>
+    </property>
+    <property name="topMargin">
+     <number>18</number>
+    </property>
+    <property name="rightMargin">
+     <number>20</number>
+    </property>
+    <property name="bottomMargin">
+     <number>18</number>
+    </property>
+    <property name="spacing">
+     <number>16</number>
+    </property>
+    <item>
+     <widget class="QFrame" name="topBar">
+      <layout class="QHBoxLayout" name="topBarLayout">
+       <property name="leftMargin">
+        <number>20</number>
+       </property>
+       <property name="topMargin">
+        <number>12</number>
+       </property>
+       <property name="rightMargin">
+        <number>20</number>
+       </property>
+       <property name="bottomMargin">
+        <number>12</number>
+       </property>
+       <property name="spacing">
+        <number>16</number>
+       </property>
+       <item>
+        <layout class="QVBoxLayout" name="titleLayout">
+         <property name="spacing">
+          <number>2</number>
+         </property>
+         <item>
+          <widget class="QLabel" name="titleLabel">
+           <property name="text">
+            <string>UAVs Web Management System</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="subtitleLabel">
+           <property name="text">
+            <string>Monitor and control your drone</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QLabel" name="fleetCountLabel">
+         <property name="text">
+          <string>10 UAVs online</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="startSimButton">
+         <property name="text">
+          <string>Start PX4 Simulation</string>
+         </property>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QSplitter" name="mainSplitter">
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+      <property name="childrenCollapsible">
+       <bool>false</bool>
+      </property>
+      <widget class="QFrame" name="gridPanel">
+        <layout class="QVBoxLayout" name="gridPanelLayout">
+         <property name="leftMargin">
+          <number>18</number>
+         </property>
+         <property name="topMargin">
+          <number>18</number>
+         </property>
+         <property name="rightMargin">
+          <number>18</number>
+         </property>
+         <property name="bottomMargin">
+          <number>18</number>
+         </property>
+         <property name="spacing">
+          <number>14</number>
+         </property>
+         <item>
+          <layout class="QHBoxLayout" name="fleetHeaderLayout">
+           <property name="spacing">
+            <number>12</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="fleetBoardLabel">
+             <property name="text">
+              <string>Fleet board</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="fleetHeaderSpacer">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>40</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QPushButton" name="addUavsButton">
+             <property name="text">
+              <string>Add UAVs</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="removeUavButton">
+             <property name="text">
+              <string>Remove UAV</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <widget class="QScrollArea" name="fleetScrollArea">
+           <property name="widgetResizable">
+            <bool>true</bool>
+           </property>
+           <widget class="QWidget" name="fleetGridContainer">
+            <layout class="QGridLayout" name="fleetGridLayout">
+             <property name="leftMargin">
+              <number>0</number>
+             </property>
+             <property name="topMargin">
+              <number>0</number>
+             </property>
+             <property name="rightMargin">
+              <number>0</number>
+             </property>
+             <property name="bottomMargin">
+              <number>0</number>
+             </property>
+             <property name="horizontalSpacing">
+              <number>14</number>
+             </property>
+             <property name="verticalSpacing">
+              <number>14</number>
+             </property>
+            </layout>
+           </widget>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      <widget class="QSplitter" name="sideSplitter">
+       <property name="orientation">
+        <enum>Qt::Vertical</enum>
+       </property>
+       <property name="childrenCollapsible">
+        <bool>false</bool>
+       </property>
+       <widget class="QFrame" name="detailPanel">
+          <layout class="QVBoxLayout" name="detailLayout">
+           <property name="leftMargin">
+            <number>18</number>
+           </property>
+           <property name="topMargin">
+            <number>18</number>
+           </property>
+           <property name="rightMargin">
+            <number>18</number>
+           </property>
+           <property name="bottomMargin">
+            <number>18</number>
+           </property>
+           <property name="spacing">
+            <number>14</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="selectedUavTitleLabel">
+             <property name="text">
+              <string>Selected UAV</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="selectedUavValueLabel">
+             <property name="text">
+              <string>Drone 1</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <layout class="QGridLayout" name="metricsGridLayout">
+             <property name="horizontalSpacing">
+              <number>12</number>
+             </property>
+             <property name="verticalSpacing">
+              <number>12</number>
+             </property>
+             <item row="0" column="0">
+              <widget class="QFrame" name="positionFrame">
+               <layout class="QVBoxLayout" name="positionFrameLayout">
+                <property name="leftMargin">
+                 <number>14</number>
+                </property>
+                <property name="topMargin">
+                 <number>12</number>
+                </property>
+                <property name="rightMargin">
+                 <number>14</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>12</number>
+                </property>
+                <item>
+                 <widget class="QLabel" name="positionTitleLabel">
+                  <property name="text">
+                   <string>Position</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="positionValueLabel">
+                  <property name="text">
+                   <string>N/A</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QFrame" name="velocityFrame">
+               <layout class="QVBoxLayout" name="velocityFrameLayout">
+                <property name="leftMargin">
+                 <number>14</number>
+                </property>
+                <property name="topMargin">
+                 <number>12</number>
+                </property>
+                <property name="rightMargin">
+                 <number>14</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>12</number>
+                </property>
+                <item>
+                 <widget class="QLabel" name="velocityTitleLabel">
+                  <property name="text">
+                   <string>Velocity</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="velocityValueLabel">
+                  <property name="text">
+                   <string>N/A</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QFrame" name="batteryFrame">
+               <layout class="QVBoxLayout" name="batteryFrameLayout">
+                <property name="leftMargin">
+                 <number>14</number>
+                </property>
+                <property name="topMargin">
+                 <number>12</number>
+                </property>
+                <property name="rightMargin">
+                 <number>14</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>12</number>
+                </property>
+                <item>
+                 <widget class="QLabel" name="batteryTitleLabel">
+                  <property name="text">
+                   <string>Battery</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="batteryValueLabel">
+                  <property name="text">
+                   <string>N/A</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QFrame" name="gpsFrame">
+               <layout class="QVBoxLayout" name="gpsFrameLayout">
+                <property name="leftMargin">
+                 <number>14</number>
+                </property>
+                <property name="topMargin">
+                 <number>12</number>
+                </property>
+                <property name="rightMargin">
+                 <number>14</number>
+                </property>
+                <property name="bottomMargin">
+                 <number>12</number>
+                </property>
+                <item>
+                 <widget class="QLabel" name="gpsTitleLabel">
+                  <property name="text">
+                   <string>GPS</string>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QLabel" name="gpsValueLabel">
+                  <property name="text">
+                   <string>N/A</string>
+                  </property>
+                 </widget>
+                </item>
+               </layout>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="missionTypeLabel">
+             <property name="text">
+              <string>Mission Type</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QComboBox" name="missionTypeCombo"/>
+           </item>
+           <item>
+            <widget class="QLabel" name="altitudeLabel">
+             <property name="text">
+              <string>Altitude (m)</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="altitudeLineEdit">
+             <property name="text">
+              <string>20</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="speedLabel">
+             <property name="text">
+              <string>Cruise Speed (m/s)</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLineEdit" name="speedLineEdit">
+             <property name="text">
+              <string>2.5</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="armButton">
+             <property name="text">
+              <string>Arm Selected UAV</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="setpointButton">
+             <property name="text">
+              <string>Send Setpoints</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="openMissionButton">
+             <property name="text">
+              <string>Open Mission</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+       <widget class="QFrame" name="logPanel">
+          <layout class="QVBoxLayout" name="logLayout">
+           <property name="leftMargin">
+            <number>18</number>
+           </property>
+           <property name="topMargin">
+            <number>18</number>
+           </property>
+           <property name="rightMargin">
+            <number>18</number>
+           </property>
+           <property name="bottomMargin">
+            <number>18</number>
+           </property>
+           <property name="spacing">
+            <number>12</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="operationsLogLabel">
+             <property name="text">
+              <string>Operations Log</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QTextEdit" name="logTextEdit"/>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="logButtonsLayout">
+             <item>
+              <widget class="QPushButton" name="clearLogButton">
+               <property name="text">
+                <string>Clear</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="saveLogButton">
+               <property name="text">
+                <string>Save</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <spacer name="horizontalSpacer">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>20</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </widget>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

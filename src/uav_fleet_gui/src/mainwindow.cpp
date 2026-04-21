@@ -1,18 +1,20 @@
 #include "mainwindow.hpp"
+#include "gis_map_widget.hpp"
 #include "uav_control_node.hpp"
+#include "ui_mainwindow.h"
 
 #include <QDebug>
 #include <QFrame>
-#include <QIcon>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QListView>
 #include <QNetworkReply>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPointer>
 #include <QProcess>
+#include <QSplitter>
 #include <QStyleFactory>
-#include <QScrollArea>
 #include <QtMath>
 #include <QVBoxLayout>
 
@@ -30,24 +32,12 @@ void SimulationThread::run() {
 
 UAVFleetGUI::UAVFleetGUI(QWidget *parent)
     : QMainWindow(parent),
+      ui_(new Ui::UAVFleetGUI),
+      interactive_map_(nullptr),
       node_(nullptr),
       sim_thread_(nullptr),
       uav_grid_container_(nullptr),
       uav_grid_layout_(nullptr),
-      setup_uavs_btn_(nullptr),
-      start_sim_btn_(nullptr),
-      arm_btn_(nullptr),
-      setpoint_btn_(nullptr),
-      mission_type_(nullptr),
-      altitude_input_(nullptr),
-      speed_input_(nullptr),
-      fleet_count_label_(nullptr),
-      selected_uav_telemetry_(nullptr),
-      position_label_(nullptr),
-      velocity_label_(nullptr),
-      battery_label_(nullptr),
-      gps_label_(nullptr),
-      output_text_(nullptr),
       telemetry_timer_(nullptr),
       map_network_manager_(new QNetworkAccessManager(this)),
       selected_uav_id_(1),
@@ -64,11 +54,12 @@ UAVFleetGUI::~UAVFleetGUI() {
         sim_thread_->terminate();
         sim_thread_->wait();
     }
+    delete ui_;
 }
 
 void UAVFleetGUI::setupUI() {
-    setWindowTitle("UAV Fleet");
-    resize(1600, 910);
+    ui_->setupUi(this);
+
     setMinimumSize(1280, 800);
 
     setStyleSheet(R"(
@@ -81,12 +72,13 @@ void UAVFleetGUI::setupUI() {
             font-family: "Noto Sans", "DejaVu Sans", sans-serif;
             font-size: 14px;
         }
-        QFrame#TopBar {
+        QFrame#topBar {
             background: #17141f;
             border: 1px solid #242134;
             border-radius: 18px;
         }
-        QFrame#CardPanel, QFrame#DetailPanel, QFrame#LogPanel, QFrame#UAVCard {
+        QFrame#gridPanel, QFrame#detailPanel, QFrame#logPanel, QFrame#UAVCard,
+        QFrame#positionFrame, QFrame#velocityFrame, QFrame#batteryFrame, QFrame#gpsFrame {
             background: #1b1827;
             border: 1px solid #2a2638;
             border-radius: 18px;
@@ -95,19 +87,56 @@ void UAVFleetGUI::setupUI() {
             border: 1px solid #bd93f9;
             background: #211d31;
         }
-        QLabel#AppTitle {
+        QLabel#titleLabel {
             color: #f8f8f2;
-            font-size: 28px;
+            font-size: 23px;
             font-weight: 800;
         }
-        QLabel#MutedText {
+        QLabel#subtitleLabel, QLabel#missionTypeLabel, QLabel#altitudeLabel, QLabel#speedLabel,
+        QLabel#positionTitleLabel, QLabel#velocityTitleLabel, QLabel#batteryTitleLabel, QLabel#gpsTitleLabel {
             color: #b8b4ca;
-            font-size: 13px;
+            font-size: 12px;
+            font-weight: 600;
         }
-        QLabel#SectionTitle {
+        QLabel#fleetBoardLabel, QLabel#selectedUavTitleLabel, QLabel#operationsLogLabel {
             color: #f8f8f2;
             font-size: 18px;
             font-weight: 700;
+        }
+        QLabel#fleetCountLabel {
+            border-radius: 12px;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            background: rgba(139, 233, 253, 0.14);
+            color: #8be9fd;
+            border: 1px solid rgba(139, 233, 253, 0.30);
+        }
+        QLabel#selectedUavValueLabel {
+            font-size: 24px;
+            font-weight: 800;
+            color: #bd93f9;
+        }
+        QLabel#positionValueLabel, QLabel#velocityValueLabel, QLabel#batteryValueLabel, QLabel#gpsValueLabel {
+            color: #f8f8f2;
+            font-size: 22px;
+            font-weight: 800;
+        }
+        QLabel#UAVTitle {
+            color: #f8f8f2;
+            font-size: 15px;
+            font-weight: 800;
+        }
+        QLabel#UAVSubtle {
+            color: #8f89a3;
+            font-size: 12px;
+        }
+        QLabel#DataPill {
+            background: #262234;
+            border: 1px solid #322d45;
+            border-radius: 10px;
+            padding: 6px 10px;
+            color: #d7d4e4;
         }
         QLabel#StatusChipReady, QLabel#StatusChipIdle, QLabel#StatusChipLink {
             border-radius: 12px;
@@ -130,44 +159,6 @@ void UAVFleetGUI::setupUI() {
             color: #8be9fd;
             border: 1px solid rgba(139, 233, 253, 0.30);
         }
-        QLabel#MetricValue {
-            color: #f8f8f2;
-            font-size: 22px;
-            font-weight: 800;
-        }
-        QLabel#MetricLabel {
-            color: #9f9ab3;
-            font-size: 12px;
-            font-weight: 700;
-        }
-        QLabel#UAVTitle {
-            color: #f8f8f2;
-            font-size: 15px;
-            font-weight: 800;
-        }
-        QLabel#UAVSubtle {
-            color: #8f89a3;
-            font-size: 12px;
-        }
-        QPushButton#MapThumb {
-            background: #1f1b2b;
-            border: 1px solid #36314a;
-            border-radius: 14px;
-            color: rgba(248, 248, 242, 0.90);
-            font-size: 16px;
-            font-weight: 700;
-        }
-        QPushButton#MapThumb:hover {
-            background: #262136;
-            border: 1px solid #4f4670;
-        }
-        QLabel#DataPill {
-            background: #262234;
-            border: 1px solid #322d45;
-            border-radius: 10px;
-            padding: 6px 10px;
-            color: #d7d4e4;
-        }
         QPushButton {
             background: #2a2638;
             border: 1px solid #3a3550;
@@ -183,11 +174,11 @@ void UAVFleetGUI::setupUI() {
         QPushButton:focus {
             border: 1px solid #6272a4;
         }
-        QPushButton#PrimaryButton {
+        QPushButton#addUavsButton, QPushButton#openMissionButton {
             background: #6272a4;
             border: 1px solid #7587bb;
         }
-        QPushButton#PrimaryButton:hover {
+        QPushButton#addUavsButton:hover, QPushButton#openMissionButton:hover {
             background: #7082b8;
         }
         QPushButton#MissionButton {
@@ -198,6 +189,11 @@ void UAVFleetGUI::setupUI() {
         }
         QPushButton#MissionButton:hover {
             background: #7b8fc1;
+        }
+        QFrame#MapThumb {
+            background: #1f1b2b;
+            border: 1px solid #36314a;
+            border-radius: 14px;
         }
         QLineEdit, QComboBox, QTextEdit {
             background: #211d2d;
@@ -257,187 +253,49 @@ void UAVFleetGUI::setupUI() {
             background: none;
             border: none;
         }
+        QSplitter::handle {
+            background: #1a1625;
+        }
+        QSplitter::handle:horizontal {
+            width: 10px;
+            margin: 0 4px;
+            border-radius: 4px;
+            border: 1px solid #2f2941;
+        }
+        QSplitter::handle:vertical {
+            height: 10px;
+            margin: 4px 0;
+            border-radius: 4px;
+            border: 1px solid #2f2941;
+        }
     )");
 
-    QWidget* central_widget = new QWidget;
-    setCentralWidget(central_widget);
+    ui_->missionTypeCombo->addItems({"Waypoint Navigation", "Area Survey", "Return to Home", "Custom"});
+    ui_->missionTypeCombo->setView(new QListView(ui_->missionTypeCombo));
+    ui_->missionTypeCombo->setStyle(QStyleFactory::create("Fusion"));
+    ui_->missionTypeCombo->view()->setStyle(QStyleFactory::create("Fusion"));
 
-    QVBoxLayout* root_layout = new QVBoxLayout(central_widget);
-    root_layout->setContentsMargins(20, 18, 20, 18);
-    root_layout->setSpacing(16);
+    ui_->mainSplitter->setStretchFactor(0, 4);
+    ui_->mainSplitter->setStretchFactor(1, 2);
+    ui_->mainSplitter->setSizes(QList<int>() << 1050 << 450);
+    ui_->sideSplitter->setStretchFactor(0, 3);
+    ui_->sideSplitter->setStretchFactor(1, 2);
+    ui_->sideSplitter->setSizes(QList<int>() << 520 << 320);
 
-    QFrame* top_bar = new QFrame;
-    top_bar->setObjectName("TopBar");
-    QHBoxLayout* top_layout = new QHBoxLayout(top_bar);
-    top_layout->setContentsMargins(20, 12, 20, 12);
-    top_layout->setSpacing(16);
+    connect(ui_->addUavsButton, &QPushButton::clicked, this, &UAVFleetGUI::setupUAVs);
+    connect(ui_->removeUavButton, &QPushButton::clicked, this, &UAVFleetGUI::removeUAV);
+    connect(ui_->startSimButton, &QPushButton::clicked, this, &UAVFleetGUI::startSimulation);
+    connect(ui_->armButton, &QPushButton::clicked, this, &UAVFleetGUI::armUAVs);
+    connect(ui_->setpointButton, &QPushButton::clicked, this, &UAVFleetGUI::sendSetpoints);
+    connect(ui_->openMissionButton, &QPushButton::clicked, this, &UAVFleetGUI::startMission);
+    connect(ui_->clearLogButton, &QPushButton::clicked, this, &UAVFleetGUI::clearLogs);
+    connect(ui_->saveLogButton, &QPushButton::clicked, this, &UAVFleetGUI::saveLogs);
 
-    QVBoxLayout* title_layout = new QVBoxLayout;
-    title_layout->setSpacing(2);
+    ui_->logTextEdit->setReadOnly(true);
+    ui_->logTextEdit->setPlaceholderText("Mission actions and PX4 output will appear here...");
 
-    QLabel* title = new QLabel("UAVs Web Management System");
-    title->setObjectName("AppTitle");
-    title->setStyleSheet("font-size: 23px; font-weight: 800;");
-    title_layout->addWidget(title);
-
-    QLabel* subtitle = new QLabel("Monitor and control your drone");
-    subtitle->setObjectName("MutedText");
-    subtitle->setStyleSheet("font-size: 12px;");
-    title_layout->addWidget(subtitle);
-    top_layout->addLayout(title_layout, 1);
-
-    fleet_count_label_ = new QLabel("10 UAVs online");
-    fleet_count_label_->setObjectName("StatusChipLink");
-    top_layout->addWidget(fleet_count_label_);
-
-    setup_uavs_btn_ = new QPushButton("Setup UAVs");
-    setup_uavs_btn_->setObjectName("PrimaryButton");
-    connect(setup_uavs_btn_, &QPushButton::clicked, this, &UAVFleetGUI::setupUAVs);
-    top_layout->addWidget(setup_uavs_btn_);
-
-    start_sim_btn_ = new QPushButton("Start PX4 Simulation");
-    connect(start_sim_btn_, &QPushButton::clicked, this, &UAVFleetGUI::startSimulation);
-    top_layout->addWidget(start_sim_btn_);
-
-    root_layout->addWidget(top_bar);
-
-    QHBoxLayout* content_layout = new QHBoxLayout;
-    content_layout->setSpacing(16);
-    root_layout->addLayout(content_layout, 1);
-
-    QFrame* grid_panel = new QFrame;
-    grid_panel->setObjectName("CardPanel");
-    QVBoxLayout* grid_panel_layout = new QVBoxLayout(grid_panel);
-    grid_panel_layout->setContentsMargins(18, 18, 18, 18);
-    grid_panel_layout->setSpacing(14);
-
-    QLabel* grid_title = new QLabel("Fleet board");
-    grid_title->setObjectName("SectionTitle");
-    grid_panel_layout->addWidget(grid_title);
-
-    QScrollArea* fleet_scroll = new QScrollArea;
-    fleet_scroll->setWidgetResizable(true);
-
-    uav_grid_container_ = new QWidget;
-    uav_grid_layout_ = new QGridLayout(uav_grid_container_);
-    uav_grid_layout_->setContentsMargins(0, 0, 0, 0);
-    uav_grid_layout_->setHorizontalSpacing(14);
-    uav_grid_layout_->setVerticalSpacing(14);
-    fleet_scroll->setWidget(uav_grid_container_);
-
-    grid_panel_layout->addWidget(fleet_scroll, 1);
-    content_layout->addWidget(grid_panel, 4);
-
-    QVBoxLayout* side_layout = new QVBoxLayout;
-    side_layout->setSpacing(16);
-    content_layout->addLayout(side_layout, 2);
-
-    QFrame* detail_panel = new QFrame;
-    detail_panel->setObjectName("DetailPanel");
-    QVBoxLayout* detail_layout = new QVBoxLayout(detail_panel);
-    detail_layout->setContentsMargins(18, 18, 18, 18);
-    detail_layout->setSpacing(14);
-
-    QLabel* detail_title = new QLabel("Selected UAV");
-    detail_title->setObjectName("SectionTitle");
-    detail_layout->addWidget(detail_title);
-
-    selected_uav_telemetry_ = new QLabel("Drone 1");
-    selected_uav_telemetry_->setStyleSheet("font-size: 24px; font-weight: 800; color: #bd93f9;");
-    detail_layout->addWidget(selected_uav_telemetry_);
-
-    QGridLayout* metrics_layout = new QGridLayout;
-    metrics_layout->setHorizontalSpacing(12);
-    metrics_layout->setVerticalSpacing(12);
-
-    auto addMetric = [&](const QString& title_text, QLabel*& value_label, int row, int col) {
-        QFrame* metric = new QFrame;
-        metric->setObjectName("DetailPanel");
-        metric->setStyleSheet("QFrame { background: #211d2d; border: 1px solid #332e45; border-radius: 14px; }");
-        QVBoxLayout* metric_layout = new QVBoxLayout(metric);
-        metric_layout->setContentsMargins(14, 12, 14, 12);
-        metric_layout->setSpacing(6);
-
-        QLabel* title_label = new QLabel(title_text);
-        title_label->setObjectName("MetricLabel");
-        metric_layout->addWidget(title_label);
-
-        value_label = new QLabel("N/A");
-        value_label->setObjectName("MetricValue");
-        metric_layout->addWidget(value_label);
-
-        metrics_layout->addWidget(metric, row, col);
-    };
-
-    addMetric("Position", position_label_, 0, 0);
-    addMetric("Velocity", velocity_label_, 0, 1);
-    addMetric("Battery", battery_label_, 1, 0);
-    addMetric("GPS", gps_label_, 1, 1);
-    detail_layout->addLayout(metrics_layout);
-
-    QLabel* mission_label = new QLabel("Mission Type");
-    mission_label->setObjectName("MutedText");
-    detail_layout->addWidget(mission_label);
-    mission_type_ = new QComboBox;
-    mission_type_->addItems({"Waypoint Navigation", "Area Survey", "Return to Home", "Custom"});
-    mission_type_->setView(new QListView(mission_type_));
-    mission_type_->setStyle(QStyleFactory::create("Fusion"));
-    mission_type_->view()->setStyle(QStyleFactory::create("Fusion"));
-    detail_layout->addWidget(mission_type_);
-
-    QLabel* altitude_label = new QLabel("Altitude (m)");
-    altitude_label->setObjectName("MutedText");
-    detail_layout->addWidget(altitude_label);
-    altitude_input_ = new QLineEdit("20");
-    detail_layout->addWidget(altitude_input_);
-
-    QLabel* speed_label = new QLabel("Cruise Speed (m/s)");
-    speed_label->setObjectName("MutedText");
-    detail_layout->addWidget(speed_label);
-    speed_input_ = new QLineEdit("2.5");
-    detail_layout->addWidget(speed_input_);
-
-    arm_btn_ = new QPushButton("Arm Selected UAV");
-    connect(arm_btn_, &QPushButton::clicked, this, &UAVFleetGUI::armUAVs);
-    detail_layout->addWidget(arm_btn_);
-
-    setpoint_btn_ = new QPushButton("Send Setpoints");
-    connect(setpoint_btn_, &QPushButton::clicked, this, &UAVFleetGUI::sendSetpoints);
-    detail_layout->addWidget(setpoint_btn_);
-
-    QPushButton* mission_btn = new QPushButton("Open Mission");
-    mission_btn->setObjectName("PrimaryButton");
-    connect(mission_btn, &QPushButton::clicked, this, &UAVFleetGUI::startMission);
-    detail_layout->addWidget(mission_btn);
-    side_layout->addWidget(detail_panel);
-
-    QFrame* log_panel = new QFrame;
-    log_panel->setObjectName("LogPanel");
-    QVBoxLayout* log_layout = new QVBoxLayout(log_panel);
-    log_layout->setContentsMargins(18, 18, 18, 18);
-    log_layout->setSpacing(12);
-
-    QLabel* log_title = new QLabel("Operations Log");
-    log_title->setObjectName("SectionTitle");
-    log_layout->addWidget(log_title);
-
-    output_text_ = new QTextEdit;
-    output_text_->setReadOnly(true);
-    output_text_->setMinimumHeight(220);
-    output_text_->setPlaceholderText("Mission actions and PX4 output will appear here...");
-    log_layout->addWidget(output_text_, 1);
-
-    QHBoxLayout* log_actions = new QHBoxLayout;
-    QPushButton* clear_btn = new QPushButton("Clear");
-    connect(clear_btn, &QPushButton::clicked, this, &UAVFleetGUI::clearLogs);
-    log_actions->addWidget(clear_btn);
-
-    QPushButton* save_btn = new QPushButton("Save");
-    connect(save_btn, &QPushButton::clicked, this, &UAVFleetGUI::saveLogs);
-    log_actions->addWidget(save_btn);
-    log_actions->addStretch();
-    log_layout->addLayout(log_actions);
-    side_layout->addWidget(log_panel, 1);
+    uav_grid_container_ = ui_->fleetGridContainer;
+    uav_grid_layout_ = ui_->fleetGridLayout;
 
     populateUAVGrid();
     selectUAV(selected_uav_id_);
@@ -452,18 +310,23 @@ void UAVFleetGUI::populateUAVGrid() {
     }
 
     const int columns = 4;
+    const int rows = (uav_count_ + columns - 1) / columns;
     for (int i = 0; i < uav_count_; ++i) {
         QWidget* card = createUAVCard(i + 1);
         uav_grid_layout_->addWidget(card, i / columns, i % columns);
     }
+    for (int row = 0; row < rows; ++row) {
+        uav_grid_layout_->setRowStretch(row, 1);
+    }
 
-    fleet_count_label_->setText(QString("%1 UAVs online").arg(uav_count_));
+    ui_->fleetCountLabel->setText(QString("%1 UAVs online").arg(uav_count_));
 }
 
 QWidget* UAVFleetGUI::createUAVCard(int uav_id) {
     QFrame* card = new QFrame;
     card->setObjectName("UAVCard");
     card->setProperty("selected", uav_id == selected_uav_id_);
+    card->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     card->style()->unpolish(card);
     card->style()->polish(card);
 
@@ -494,17 +357,21 @@ QWidget* UAVFleetGUI::createUAVCard(int uav_id) {
 
     QHBoxLayout* body_layout = new QHBoxLayout;
     body_layout->setSpacing(10);
+    body_layout->setAlignment(Qt::AlignTop);
 
-    QPushButton* map_button = new QPushButton;
-    map_button->setObjectName("MapThumb");
-    map_button->setMinimumSize(240, 150);
-    map_button->setCursor(Qt::PointingHandCursor);
-    map_button->setIcon(QIcon(createMapPreview(uav_id)));
-    map_button->setIconSize(QSize(236, 146));
-    map_button->setText(QString(" "));
-    requestMapPreview(map_button, uav_id);
-    connect(map_button, &QPushButton::clicked, this, [this, uav_id]() { selectUAV(uav_id); });
-    body_layout->addWidget(map_button, 1);
+    QFrame* map_frame = new QFrame;
+    map_frame->setObjectName("MapThumb");
+    map_frame->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    QVBoxLayout* map_layout = new QVBoxLayout(map_frame);
+    map_layout->setContentsMargins(0, 0, 0, 0);
+
+    GISMapWidget* card_map = new GISMapWidget(map_frame);
+    card_map->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    const QPointF coordinate = uavCoordinate(uav_id);
+    card_map->setCenterCoordinate(coordinate.x(), coordinate.y());
+    card_map->setZoomLevel(10);
+    map_layout->addWidget(card_map);
+    body_layout->addWidget(map_frame, 1);
 
     QVBoxLayout* chip_layout = new QVBoxLayout;
     chip_layout->setSpacing(8);
@@ -528,15 +395,11 @@ QWidget* UAVFleetGUI::createUAVCard(int uav_id) {
     QHBoxLayout* data_layout = new QHBoxLayout;
     data_layout->setSpacing(8);
 
-    const QPointF coordinate = uavCoordinate(uav_id);
-    const QString lat_value = QString::number(coordinate.x(), 'f', 4);
-    const QString lon_value = QString::number(coordinate.y(), 'f', 4);
-
-    QLabel* lat = new QLabel(QString("Lat\n%1").arg(lat_value));
+    QLabel* lat = new QLabel(QString("Lat\n%1").arg(QString::number(coordinate.x(), 'f', 4)));
     lat->setObjectName("DataPill");
     data_layout->addWidget(lat);
 
-    QLabel* lon = new QLabel(QString("Lon\n%1").arg(lon_value));
+    QLabel* lon = new QLabel(QString("Lon\n%1").arg(QString::number(coordinate.y(), 'f', 4)));
     lon->setObjectName("DataPill");
     data_layout->addWidget(lon);
 
@@ -581,30 +444,6 @@ QPixmap UAVFleetGUI::createMapPreview(int uav_id) const {
     painter.drawEllipse(QRectF(132, 26, 82, 56));
     painter.drawEllipse(QRectF(150, 68, 56, 34));
     painter.drawEllipse(QRectF(96, 84, 64, 32));
-    painter.drawEllipse(QRectF(172, 18, 28, 18));
-
-    painter.setBrush(QColor(255, 255, 255, 30));
-    painter.drawEllipse(QRectF(24, 28, 38, 18));
-    painter.drawEllipse(QRectF(154, 34, 44, 16));
-
-    painter.setPen(QPen(QColor("#ff79c6"), 2.4));
-    const QPointF start(28 + ((uav_id * 17) % 48), 92 - ((uav_id * 7) % 20));
-    const QPointF mid(104 + ((uav_id * 11) % 24), 60 + ((uav_id * 5) % 24));
-    const QPointF end(188 - ((uav_id * 9) % 40), 32 + ((uav_id * 13) % 52));
-    QPainterPath route(start);
-    route.quadTo(QPointF(122, 104), mid);
-    route.quadTo(QPointF(172, 84), end);
-    painter.drawPath(route);
-
-    painter.setBrush(QColor("#50fa7b"));
-    painter.setPen(QPen(QColor("#0b0b10"), 1.5));
-    painter.drawEllipse(start, 4.5, 4.5);
-
-    painter.setBrush(QColor("#ffb86c"));
-    painter.drawEllipse(mid, 4.5, 4.5);
-
-    painter.setBrush(QColor("#8be9fd"));
-    painter.drawEllipse(end, 5.0, 5.0);
 
     painter.setPen(QColor(248, 248, 242, 230));
     painter.setFont(QFont("Noto Sans", 10, QFont::Bold));
@@ -667,8 +506,6 @@ void UAVFleetGUI::requestMapPreview(QPushButton* map_button, int uav_id) {
         painter.setPen(QColor(248, 248, 242, 225));
         painter.setFont(QFont("Noto Sans", 10, QFont::Bold));
         painter.drawText(QRect(10, 8, 140, 20), QString("UAV %1").arg(uav_id));
-        painter.setFont(QFont("Noto Sans", 9));
-        painter.drawText(QRect(10, preview.height() - 22, 170, 16), "ArcGIS World Imagery");
         painter.end();
 
         map_preview_cache_.insert(uav_id, preview);
@@ -680,7 +517,7 @@ void UAVFleetGUI::requestMapPreview(QPushButton* map_button, int uav_id) {
 
 void UAVFleetGUI::selectUAV(int uav_id) {
     selected_uav_id_ = uav_id;
-    selected_uav_telemetry_->setText(QString("Drone %1").arg(uav_id));
+    ui_->selectedUavValueLabel->setText(QString("Drone %1").arg(uav_id));
     populateUAVGrid();
     updateTelemetry();
     updateOutput(QString("UAV %1 is now selected.").arg(uav_id));
@@ -703,25 +540,42 @@ void UAVFleetGUI::sendSetpoints() {
     qDebug() << "Sending setpoints to UAV" << selected_uav_id_;
     updateOutput(QString("Setpoints pushed to UAV %1 at %2 m altitude and %3 m/s.")
         .arg(selected_uav_id_)
-        .arg(altitude_input_->text())
-        .arg(speed_input_->text()));
+        .arg(ui_->altitudeLineEdit->text())
+        .arg(ui_->speedLineEdit->text()));
 }
 
 void UAVFleetGUI::setupUAVs() {
     ++uav_count_;
     populateUAVGrid();
     selectUAV(uav_count_);
-    updateOutput(QString("Setup UAVs created UAV %1 and added it to the fleet wall.").arg(uav_count_));
+    updateOutput(QString("Add UAVs created UAV %1 and added it to the fleet wall.").arg(uav_count_));
+}
+
+void UAVFleetGUI::removeUAV() {
+    if (uav_count_ <= 1) {
+        updateOutput("Cannot remove UAV. At least one UAV must remain on the fleet board.");
+        return;
+    }
+
+    const int removed_id = selected_uav_id_;
+    --uav_count_;
+    if (selected_uav_id_ > uav_count_) {
+        selected_uav_id_ = uav_count_;
+    }
+
+    populateUAVGrid();
+    selectUAV(selected_uav_id_);
+    updateOutput(QString("Removed UAV %1 from the fleet board.").arg(removed_id));
 }
 
 void UAVFleetGUI::startMission() {
     updateOutput(QString("Mission opened for UAV %1 using %2 mode.")
         .arg(selected_uav_id_)
-        .arg(mission_type_->currentText()));
+        .arg(ui_->missionTypeCombo->currentText()));
 }
 
 void UAVFleetGUI::clearLogs() {
-    output_text_->clear();
+    ui_->logTextEdit->clear();
 }
 
 void UAVFleetGUI::saveLogs() {
@@ -730,17 +584,17 @@ void UAVFleetGUI::saveLogs() {
 
 void UAVFleetGUI::updateTelemetry() {
     const QPointF coordinate = uavCoordinate(selected_uav_id_);
-    position_label_->setText(QString("%1, %2")
+    ui_->positionValueLabel->setText(QString("%1, %2")
         .arg(QString::number(coordinate.x(), 'f', 4))
         .arg(QString::number(coordinate.y(), 'f', 4)));
-    velocity_label_->setText(QString("%1 m/s").arg(speed_input_->text()));
-    battery_label_->setText(QString("%1%").arg(92 - ((selected_uav_id_ * 3) % 20)));
-    gps_label_->setText((selected_uav_id_ % 2 == 0) ? "3D Fix" : "RTK");
+    ui_->velocityValueLabel->setText(QString("%1 m/s").arg(ui_->speedLineEdit->text()));
+    ui_->batteryValueLabel->setText(QString("%1%").arg(92 - ((selected_uav_id_ * 3) % 20)));
+    ui_->gpsValueLabel->setText((selected_uav_id_ % 2 == 0) ? "3D Fix" : "RTK");
 }
 
 void UAVFleetGUI::updateOutput(const QString& text) {
-    if (!output_text_) {
+    if (!ui_ || !ui_->logTextEdit) {
         return;
     }
-    output_text_->append(text);
+    ui_->logTextEdit->append(text);
 }

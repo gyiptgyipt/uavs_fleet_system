@@ -4,15 +4,19 @@
 #include "ui_mainwindow.h"
 
 #include <QDebug>
+#include <QCheckBox>
+#include <QDialog>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QLabel>
 #include <QListView>
 #include <QNetworkReply>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPointer>
 #include <QProcess>
+#include <QSlider>
 #include <QSplitter>
 #include <QStyleFactory>
 #include <QtMath>
@@ -41,6 +45,11 @@ UAVFleetGUI::UAVFleetGUI(QWidget *parent)
       uav_grid_layout_(nullptr),
       telemetry_timer_(nullptr),
       map_network_manager_(new QNetworkAccessManager(this)),
+      stack_widget_(nullptr),
+      main_page_(nullptr),
+      mission_page_(nullptr),
+      mission_title_label_(nullptr),
+      mission_map_(nullptr),
       selected_uav_id_(1),
       uav_count_(10) {
     setupUI();
@@ -60,6 +69,24 @@ UAVFleetGUI::~UAVFleetGUI() {
 
 void UAVFleetGUI::setupUI() {
     ui_->setupUi(this);
+
+    QWidget* original_central = centralWidget();
+    if (original_central) {
+        original_central->setParent(nullptr);
+    }
+
+    stack_widget_ = new QStackedWidget(this);
+    if (original_central) {
+        stack_widget_->addWidget(original_central);
+    }
+
+    QWidget* root_container = new QWidget(this);
+    QVBoxLayout* root_layout = new QVBoxLayout(root_container);
+    root_layout->setContentsMargins(0, 0, 0, 0);
+    root_layout->addWidget(stack_widget_);
+    setCentralWidget(root_container);
+
+    main_page_ = original_central;
 
     setMinimumSize(1280, 800);
 
@@ -327,6 +354,120 @@ void UAVFleetGUI::setupUI() {
     selectUAV(selected_uav_id_);
 }
 
+void UAVFleetGUI::setupMissionPage() {
+    mission_page_ = new QWidget();
+    stack_widget_->addWidget(mission_page_);
+
+    // Setup mission page
+    QVBoxLayout* root_layout = new QVBoxLayout(mission_page_);
+    root_layout->setContentsMargins(18, 18, 18, 18);
+    root_layout->setSpacing(16);
+
+    QFrame* header_frame = new QFrame(mission_page_);
+    header_frame->setObjectName("detailPanel");
+    QHBoxLayout* header_layout = new QHBoxLayout(header_frame);
+    header_layout->setContentsMargins(14, 14, 14, 14);
+    header_layout->setSpacing(14);
+
+    QLabel* title_label = new QLabel(QString("Drone %1 Mission").arg(selected_uav_id_), header_frame);
+    title_label->setStyleSheet("font-size: 24px; font-weight: 800; color: #f8f8f2;");
+    header_layout->addWidget(title_label, 1);
+    mission_title_label_ = title_label;
+
+    QLabel* status_label = new QLabel("status loading...", header_frame);
+    status_label->setStyleSheet("color: #8f89a3; font-size: 14px;");
+    header_layout->addWidget(status_label);
+
+    QPushButton* back_button = new QPushButton("Back", header_frame);
+    back_button->setObjectName("MissionButton");
+    connect(back_button, &QPushButton::clicked, this, [this]() {
+        stack_widget_->setCurrentWidget(main_page_);
+    });
+    header_layout->addWidget(back_button);
+    header_layout->addStretch();
+
+    root_layout->addWidget(header_frame, 0);
+
+    GISMapWidget* mission_map = new GISMapWidget(mission_page_);
+    mission_map->setCenterCoordinate(uavCoordinate(selected_uav_id_).x(), uavCoordinate(selected_uav_id_).y());
+    mission_map->setZoomLevel(12);
+    mission_map->setMinimumHeight(440);
+    root_layout->addWidget(mission_map, 1);
+    mission_map_ = mission_map;
+
+    QFrame* bottom_frame = new QFrame(mission_page_);
+    bottom_frame->setObjectName("detailPanel");
+    QHBoxLayout* bottom_layout = new QHBoxLayout(bottom_frame);
+    bottom_layout->setContentsMargins(14, 14, 14, 14);
+    bottom_layout->setSpacing(18);
+
+    QPushButton* calibrate_button = new QPushButton("Calibrate Map", bottom_frame);
+    calibrate_button->setObjectName("MissionButton");
+    connect(calibrate_button, &QPushButton::clicked, this, [status_label]() {
+        status_label->setText("Map calibrated");
+    });
+    bottom_layout->addWidget(calibrate_button, 0, Qt::AlignLeft);
+
+    bottom_layout->addStretch();
+
+    QVBoxLayout* right_side_layout = new QVBoxLayout;
+    right_side_layout->setSpacing(14);
+
+    QLabel* speed_label = new QLabel(QString("Speed (%1 m/s)").arg(ui_->speedLineEdit->text()), bottom_frame);
+    QSlider* speed_slider = new QSlider(Qt::Horizontal, bottom_frame);
+    speed_slider->setRange(0, 30);
+    speed_slider->setValue(ui_->speedLineEdit->text().toInt());
+    right_side_layout->addWidget(speed_label);
+    right_side_layout->addWidget(speed_slider);
+
+    QLabel* altitude_label = new QLabel(QString("Altitude (%1 m)").arg(ui_->altitudeLineEdit->text()), bottom_frame);
+    QSlider* altitude_slider = new QSlider(Qt::Horizontal, bottom_frame);
+    altitude_slider->setRange(0, 120);
+    altitude_slider->setValue(ui_->altitudeLineEdit->text().toInt());
+    right_side_layout->addWidget(altitude_label);
+    right_side_layout->addWidget(altitude_slider);
+
+    QCheckBox* manual_mode = new QCheckBox("Manual Mode", bottom_frame);
+    manual_mode->setChecked(true);
+    right_side_layout->addWidget(manual_mode);
+
+    QVBoxLayout* buttons_layout = new QVBoxLayout;
+    buttons_layout->setSpacing(12);
+    QPushButton* arm_button = new QPushButton("Arm", bottom_frame);
+    QPushButton* force_disarm_button = new QPushButton("Force Disarm", bottom_frame);
+    QPushButton* land_button = new QPushButton("Land", bottom_frame);
+    QPushButton* disarm_button = new QPushButton("Disarm", bottom_frame);
+    buttons_layout->addWidget(arm_button);
+    buttons_layout->addWidget(force_disarm_button);
+    buttons_layout->addWidget(land_button);
+    buttons_layout->addWidget(disarm_button);
+
+    right_side_layout->addLayout(buttons_layout);
+
+    bottom_layout->addLayout(right_side_layout, 0);
+
+    root_layout->addWidget(bottom_frame, 0);
+
+    connect(speed_slider, &QSlider::valueChanged, this, [speed_label](int value) {
+        speed_label->setText(QString("Speed (%1 m/s)").arg(value));
+    });
+    connect(altitude_slider, &QSlider::valueChanged, this, [altitude_label](int value) {
+        altitude_label->setText(QString("Altitude (%1 m)").arg(value));
+    });
+    connect(arm_button, &QPushButton::clicked, this, [this]() {
+        updateOutput(QString("Arm command sent to UAV %1 from mission overlay.").arg(selected_uav_id_));
+    });
+    connect(disarm_button, &QPushButton::clicked, this, [this]() {
+        updateOutput(QString("Disarm command sent to UAV %1 from mission overlay.").arg(selected_uav_id_));
+    });
+    connect(force_disarm_button, &QPushButton::clicked, this, [this]() {
+        updateOutput(QString("Force disarm command sent to UAV %1 from mission overlay.").arg(selected_uav_id_));
+    });
+    connect(land_button, &QPushButton::clicked, this, [this]() {
+        updateOutput(QString("Land command sent to UAV %1 from mission overlay.").arg(selected_uav_id_));
+    });
+}
+
 void UAVFleetGUI::populateUAVGrid() {
     while (QLayoutItem* item = uav_grid_layout_->takeAt(0)) {
         if (item->widget()) {
@@ -557,6 +698,15 @@ void UAVFleetGUI::selectUAV(int uav_id) {
     updateOutput(QString("UAV %1 is now selected.").arg(uav_id));
 }
 
+void UAVFleetGUI::openMissionDialog() {
+    if (!mission_page_) {
+        setupMissionPage();
+    }
+    mission_title_label_->setText(QString("Drone %1 Mission").arg(selected_uav_id_));
+    mission_map_->setCenterCoordinate(uavCoordinate(selected_uav_id_).x(), uavCoordinate(selected_uav_id_).y());
+    stack_widget_->setCurrentWidget(mission_page_);
+}
+
 void UAVFleetGUI::startSimulation() {
     const QString command = "cd ~/PX4-Autopilot && ./Tools/simulation/gazebo-classic/sitl_multiple_run.sh";
     sim_thread_ = new SimulationThread(command);
@@ -606,6 +756,7 @@ void UAVFleetGUI::startMission() {
     updateOutput(QString("Mission opened for UAV %1 using %2 mode.")
         .arg(selected_uav_id_)
         .arg(ui_->missionTypeCombo->currentText()));
+    openMissionDialog();
 }
 
 void UAVFleetGUI::clearLogs() {

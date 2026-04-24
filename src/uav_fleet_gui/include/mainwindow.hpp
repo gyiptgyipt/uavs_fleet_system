@@ -3,10 +3,12 @@
 
 #include <QGridLayout>
 #include <QHash>
+#include <QLabel>
 #include <QMainWindow>
 #include <QNetworkAccessManager>
 #include <QPixmap>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QThread>
 #include <QTimer>
 
@@ -51,6 +53,8 @@ private slots:
 
 private:
     void setupUI();
+    void setupMissionPage();
+    void openMissionDialog();
     void populateUAVGrid();
     QWidget* createUAVCard(int uav_id);
     QPixmap createMapPreview(int uav_id) const;
@@ -69,6 +73,12 @@ private:
     QTimer* telemetry_timer_;
     QNetworkAccessManager* map_network_manager_;
     QHash<int, QPixmap> map_preview_cache_;
+
+    QStackedWidget* stack_widget_;
+    QWidget* main_page_;
+    QWidget* mission_page_;
+    QLabel* mission_title_label_;
+    GISMapWidget* mission_map_;
 
     int selected_uav_id_;
     int uav_count_;

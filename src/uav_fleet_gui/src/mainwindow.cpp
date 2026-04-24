@@ -17,6 +17,7 @@
 #include <QStyleFactory>
 #include <QtMath>
 #include <QVBoxLayout>
+#include <algorithm>
 
 SimulationThread::SimulationThread(const QString& command)
     : command_(command) {}
@@ -94,7 +95,7 @@ void UAVFleetGUI::setupUI() {
         }
         QLabel#subtitleLabel, QLabel#missionTypeLabel, QLabel#altitudeLabel, QLabel#speedLabel,
         QLabel#positionTitleLabel, QLabel#velocityTitleLabel, QLabel#batteryTitleLabel, QLabel#gpsTitleLabel {
-            color: #b8b4ca;
+            color: #30275a;
             font-size: 12px;
             font-weight: 600;
         }
@@ -274,6 +275,31 @@ void UAVFleetGUI::setupUI() {
     ui_->missionTypeCombo->setView(new QListView(ui_->missionTypeCombo));
     ui_->missionTypeCombo->setStyle(QStyleFactory::create("Fusion"));
     ui_->missionTypeCombo->view()->setStyle(QStyleFactory::create("Fusion"));
+    ui_->missionTypeCombo->view()->setStyleSheet(R"(
+        QListView {
+            background: #211d2d;
+            color: #f8f8f2;
+            border: 1px solid #3a3550 !important;
+            outline: none;
+            margin: 0px;
+            padding: 0px;
+        }
+        QListView::item {
+            min-height: 28px;
+            padding: 6px 10px;
+            margin: 0px;
+        }
+        QListView::item:selected {
+            background: #6272a4;
+            color: #f8f8f2;
+        }
+    )");
+    ui_->missionTypeCombo->view()->window()->setStyleSheet(R"(
+        QWidget {
+            background-color: #211d2d;
+            border: 1px solid #3a3550;
+        }
+    )");
 
     ui_->mainSplitter->setStretchFactor(0, 4);
     ui_->mainSplitter->setStretchFactor(1, 2);
@@ -318,6 +344,13 @@ void UAVFleetGUI::populateUAVGrid() {
     for (int row = 0; row < rows; ++row) {
         uav_grid_layout_->setRowStretch(row, 1);
     }
+    // Only set column stretch for columns that have UAVs
+    const int actual_columns = std::min(columns, uav_count_);
+    for (int col = 0; col < actual_columns; ++col) {
+        uav_grid_layout_->setColumnStretch(col, 1);
+    }
+    // Add stretch to the right to prevent cards from expanding
+    uav_grid_layout_->setColumnStretch(columns, 1);
 
     ui_->fleetCountLabel->setText(QString("%1 UAVs online").arg(uav_count_));
 }
@@ -326,7 +359,8 @@ QWidget* UAVFleetGUI::createUAVCard(int uav_id) {
     QFrame* card = new QFrame;
     card->setObjectName("UAVCard");
     card->setProperty("selected", uav_id == selected_uav_id_);
-    card->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    card->setMaximumWidth(520);
     card->style()->unpolish(card);
     card->style()->polish(card);
 

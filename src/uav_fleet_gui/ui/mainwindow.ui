@@ -137,16 +137,35 @@
             </spacer>
            </item>
            <item>
-            <widget class="QPushButton" name="addUavsButton">
+            <widget class="QLabel" name="uavCountInputLabel">
              <property name="text">
-              <string>Add UAVs</string>
+              <string>UAV count</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="removeUavButton">
+            <widget class="QLineEdit" name="uavCountLineEdit">
+             <property name="minimumSize">
+              <size>
+               <width>72</width>
+               <height>0</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>96</width>
+               <height>16777215</height>
+              </size>
+             </property>
              <property name="text">
-              <string>Remove UAV</string>
+              <string>10</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="saveUavCountButton">
+             <property name="text">
+              <string>Save</string>
              </property>
             </widget>
            </item>

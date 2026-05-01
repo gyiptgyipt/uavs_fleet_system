@@ -6,22 +6,33 @@
 #include <QDebug>
 #include <QCheckBox>
 #include <QDialog>
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
 #include <QListView>
+#include <QMouseEvent>
 #include <QNetworkReply>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPointer>
 #include <QProcess>
+#include <QSettings>
 #include <QSlider>
 #include <QSplitter>
 #include <QStyleFactory>
+#include <QIntValidator>
 #include <QtMath>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <cmath>
+
+namespace {
+constexpr int kUavBoardColumns = 3;
+constexpr int kMinUavCount = 1;
+constexpr int kMaxUavCount = 99;
+}
 
 SimulationThread::SimulationThread(const QString& command)
     : command_(command) {}
@@ -65,6 +76,17 @@ UAVFleetGUI::~UAVFleetGUI() {
         sim_thread_->wait();
     }
     delete ui_;
+}
+
+void UAVFleetGUI::setControlNode(UAVControlNode* node) {
+    node_ = node;
+    if (!node_) {
+        return;
+    }
+    for (int uav_id = 1; uav_id <= uav_count_; ++uav_id) {
+        node_->trackHeartbeat(uav_id);
+    }
+    refreshHeartbeatIndicators();
 }
 
 void UAVFleetGUI::setupUI() {
@@ -202,11 +224,11 @@ void UAVFleetGUI::setupUI() {
         QPushButton:focus {
             border: 1px solid #6272a4;
         }
-        QPushButton#addUavsButton, QPushButton#openMissionButton {
+        QPushButton#saveUavCountButton, QPushButton#openMissionButton {
             background: #6272a4;
             border: 1px solid #7587bb;
         }
-        QPushButton#addUavsButton:hover, QPushButton#openMissionButton:hover {
+        QPushButton#saveUavCountButton:hover, QPushButton#openMissionButton:hover {
             background: #7082b8;
         }
         QPushButton#MissionButton {
@@ -335,8 +357,10 @@ void UAVFleetGUI::setupUI() {
     ui_->sideSplitter->setStretchFactor(1, 2);
     ui_->sideSplitter->setSizes(QList<int>() << 520 << 320);
 
-    connect(ui_->addUavsButton, &QPushButton::clicked, this, &UAVFleetGUI::setupUAVs);
-    connect(ui_->removeUavButton, &QPushButton::clicked, this, &UAVFleetGUI::removeUAV);
+    ui_->uavCountLineEdit->setValidator(new QIntValidator(kMinUavCount, kMaxUavCount, ui_->uavCountLineEdit));
+    ui_->uavCountLineEdit->setText(QString::number(uav_count_));
+    connect(ui_->saveUavCountButton, &QPushButton::clicked, this, &UAVFleetGUI::applyUavCountFromInput);
+    connect(ui_->uavCountLineEdit, &QLineEdit::returnPressed, this, &UAVFleetGUI::applyUavCountFromInput);
     connect(ui_->startSimButton, &QPushButton::clicked, this, &UAVFleetGUI::startSimulation);
     connect(ui_->armButton, &QPushButton::clicked, this, &UAVFleetGUI::armUAVs);
     connect(ui_->setpointButton, &QPushButton::clicked, this, &UAVFleetGUI::sendSetpoints);
@@ -350,6 +374,7 @@ void UAVFleetGUI::setupUI() {
     uav_grid_container_ = ui_->fleetGridContainer;
     uav_grid_layout_ = ui_->fleetGridLayout;
 
+    loadPersistentSettings();
     populateUAVGrid();
     selectUAV(selected_uav_id_);
 }
@@ -475,25 +500,29 @@ void UAVFleetGUI::populateUAVGrid() {
         }
         delete item;
     }
+    heartbeat_chip_labels_.clear();
 
-    const int columns = 4;
+    const int columns = std::max(1, std::min(kUavBoardColumns, uav_count_));
     const int rows = (uav_count_ + columns - 1) / columns;
     for (int i = 0; i < uav_count_; ++i) {
+        if (node_) {
+            node_->trackHeartbeat(i + 1);
+        }
         QWidget* card = createUAVCard(i + 1);
         uav_grid_layout_->addWidget(card, i / columns, i % columns);
     }
     for (int row = 0; row < rows; ++row) {
         uav_grid_layout_->setRowStretch(row, 1);
     }
-    // Only set column stretch for columns that have UAVs
-    const int actual_columns = std::min(columns, uav_count_);
-    for (int col = 0; col < actual_columns; ++col) {
+    for (int col = 0; col < columns; ++col) {
         uav_grid_layout_->setColumnStretch(col, 1);
     }
-    // Add stretch to the right to prevent cards from expanding
-    uav_grid_layout_->setColumnStretch(columns, 1);
 
-    ui_->fleetCountLabel->setText(QString("%1 UAVs online").arg(uav_count_));
+    uav_grid_container_->setMaximumWidth(QWIDGETSIZE_MAX);
+    uav_grid_layout_->setAlignment(Qt::AlignTop);
+
+    updateFleetOnlineLabel();
+    refreshHeartbeatIndicators();
 }
 
 QWidget* UAVFleetGUI::createUAVCard(int uav_id) {
@@ -501,7 +530,6 @@ QWidget* UAVFleetGUI::createUAVCard(int uav_id) {
     card->setObjectName("UAVCard");
     card->setProperty("selected", uav_id == selected_uav_id_);
     card->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    card->setMaximumWidth(520);
     card->style()->unpolish(card);
     card->style()->polish(card);
 
@@ -562,6 +590,7 @@ QWidget* UAVFleetGUI::createUAVCard(int uav_id) {
     QLabel* link_chip = new QLabel((uav_id % 2 == 0) ? "link ok" : "standby");
     link_chip->setObjectName("StatusChipIdle");
     chip_layout->addWidget(link_chip);
+    heartbeat_chip_labels_.insert(uav_id, link_chip);
     chip_layout->addStretch();
     body_layout->addLayout(chip_layout);
 
@@ -583,6 +612,15 @@ QWidget* UAVFleetGUI::createUAVCard(int uav_id) {
     data_layout->addWidget(alt);
 
     card_layout->addLayout(data_layout);
+
+    card->setProperty("uav_id", uav_id);
+    card->installEventFilter(this);
+    const QList<QWidget*> child_widgets = card->findChildren<QWidget*>();
+    for (QWidget* child : child_widgets) {
+        child->setProperty("uav_id", uav_id);
+        child->installEventFilter(this);
+    }
+
     return card;
 }
 
@@ -690,7 +728,31 @@ void UAVFleetGUI::requestMapPreview(QPushButton* map_button, int uav_id) {
     });
 }
 
+bool UAVFleetGUI::eventFilter(QObject* watched, QEvent* event) {
+    if (event && event->type() == QEvent::MouseButtonPress) {
+        QWidget* widget = qobject_cast<QWidget*>(watched);
+        QMouseEvent* mouse_event = static_cast<QMouseEvent*>(event);
+        if (widget && mouse_event && mouse_event->button() == Qt::LeftButton) {
+            bool ok = false;
+            const int uav_id = widget->property("uav_id").toInt(&ok);
+            if (ok && uav_id >= 1 && uav_id <= uav_count_ && selected_uav_id_ != uav_id) {
+                selectUAV(uav_id);
+            }
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
 void UAVFleetGUI::selectUAV(int uav_id) {
+    if (uav_id < 1 || uav_id > uav_count_) {
+        return;
+    }
+    if (selected_uav_id_ == uav_id) {
+        ui_->selectedUavValueLabel->setText(QString("Drone %1").arg(uav_id));
+        updateTelemetry();
+        return;
+    }
+
     selected_uav_id_ = uav_id;
     ui_->selectedUavValueLabel->setText(QString("Drone %1").arg(uav_id));
     populateUAVGrid();
@@ -716,40 +778,66 @@ void UAVFleetGUI::startSimulation() {
 }
 
 void UAVFleetGUI::armUAVs() {
-    qDebug() << "Arming UAV" << selected_uav_id_;
-    updateOutput(QString("Arm command sent to UAV %1.").arg(selected_uav_id_));
-}
-
-void UAVFleetGUI::sendSetpoints() {
-    qDebug() << "Sending setpoints to UAV" << selected_uav_id_;
-    updateOutput(QString("Setpoints pushed to UAV %1 at %2 m altitude and %3 m/s.")
-        .arg(selected_uav_id_)
-        .arg(ui_->altitudeLineEdit->text())
-        .arg(ui_->speedLineEdit->text()));
-}
-
-void UAVFleetGUI::setupUAVs() {
-    ++uav_count_;
-    populateUAVGrid();
-    selectUAV(uav_count_);
-    updateOutput(QString("Add UAVs created UAV %1 and added it to the fleet wall.").arg(uav_count_));
-}
-
-void UAVFleetGUI::removeUAV() {
-    if (uav_count_ <= 1) {
-        updateOutput("Cannot remove UAV. At least one UAV must remain on the fleet board.");
+    if (!node_) {
+        updateOutput("Control node not available yet. Start ROS and try again.");
         return;
     }
 
-    const int removed_id = selected_uav_id_;
-    --uav_count_;
+    node_->armVehicle(selected_uav_id_);
+    updateOutput(QString("PX4 arm command sent to UAV %1.").arg(selected_uav_id_));
+}
+
+void UAVFleetGUI::sendSetpoints() {
+    if (!node_) {
+        updateOutput("Control node not available yet. Start ROS and try again.");
+        return;
+    }
+
+    bool altitude_ok = false;
+    const double altitude = ui_->altitudeLineEdit->text().toDouble(&altitude_ok);
+    const double commanded_altitude = altitude_ok ? altitude : 10.0;
+    const QPointF coordinate = uavCoordinate(selected_uav_id_);
+    const double px4_z = -std::abs(commanded_altitude);
+
+    node_->sendSetpoint(selected_uav_id_, coordinate.x(), coordinate.y(), px4_z, 0.0);
+
+    updateOutput(QString("PX4 setpoint sent to UAV %1: x=%2 y=%3 z=%4")
+        .arg(selected_uav_id_)
+        .arg(QString::number(coordinate.x(), 'f', 2))
+        .arg(QString::number(coordinate.y(), 'f', 2))
+        .arg(QString::number(px4_z, 'f', 2)));
+}
+
+void UAVFleetGUI::applyUavCountFromInput() {
+    bool ok = false;
+    int requested_count = ui_->uavCountLineEdit->text().toInt(&ok);
+    if (!ok) {
+        requested_count = uav_count_;
+    }
+    requested_count = std::clamp(requested_count, kMinUavCount, kMaxUavCount);
+    ui_->uavCountLineEdit->setText(QString::number(requested_count));
+
+    if (requested_count == uav_count_) {
+        savePersistentSettings();
+        updateOutput(QString("UAV count saved: %1").arg(uav_count_));
+        return;
+    }
+
+    uav_count_ = requested_count;
     if (selected_uav_id_ > uav_count_) {
         selected_uav_id_ = uav_count_;
     }
 
+    if (node_) {
+        for (int uav_id = 1; uav_id <= uav_count_; ++uav_id) {
+            node_->trackHeartbeat(uav_id);
+        }
+    }
+
     populateUAVGrid();
     selectUAV(selected_uav_id_);
-    updateOutput(QString("Removed UAV %1 from the fleet board.").arg(removed_id));
+    savePersistentSettings();
+    updateOutput(QString("UAV count updated and saved: %1").arg(uav_count_));
 }
 
 void UAVFleetGUI::startMission() {
@@ -768,13 +856,26 @@ void UAVFleetGUI::saveLogs() {
 }
 
 void UAVFleetGUI::updateTelemetry() {
+    refreshHeartbeatIndicators();
+
     const QPointF coordinate = uavCoordinate(selected_uav_id_);
     ui_->positionValueLabel->setText(QString("%1, %2")
         .arg(QString::number(coordinate.x(), 'f', 4))
         .arg(QString::number(coordinate.y(), 'f', 4)));
     ui_->velocityValueLabel->setText(QString("%1 m/s").arg(ui_->speedLineEdit->text()));
     ui_->batteryValueLabel->setText(QString("%1%").arg(92 - ((selected_uav_id_ * 3) % 20)));
-    ui_->gpsValueLabel->setText((selected_uav_id_ % 2 == 0) ? "3D Fix" : "RTK");
+    QString gps_fix = (selected_uav_id_ % 2 == 0) ? "3D Fix" : "RTK";
+    if (node_) {
+        const auto heartbeat_age_ms = node_->heartbeatAgeMs(selected_uav_id_);
+        if (!heartbeat_age_ms.has_value()) {
+            gps_fix += " | HB: no signal";
+        } else if (*heartbeat_age_ms <= 3000) {
+            gps_fix += QString(" | HB: %1 ms").arg(*heartbeat_age_ms);
+        } else {
+            gps_fix += QString(" | HB stale %1 ms").arg(*heartbeat_age_ms);
+        }
+    }
+    ui_->gpsValueLabel->setText(gps_fix);
 }
 
 void UAVFleetGUI::updateOutput(const QString& text) {
@@ -782,4 +883,67 @@ void UAVFleetGUI::updateOutput(const QString& text) {
         return;
     }
     ui_->logTextEdit->append(text);
+}
+
+void UAVFleetGUI::refreshHeartbeatIndicators() {
+    updateFleetOnlineLabel();
+    for (auto it = heartbeat_chip_labels_.begin(); it != heartbeat_chip_labels_.end(); ++it) {
+        updateHeartbeatChip(it.value(), it.key());
+    }
+}
+
+void UAVFleetGUI::updateHeartbeatChip(QLabel* chip, int uav_id) {
+    if (!chip) {
+        return;
+    }
+
+    QString chip_text = "HB: no signal";
+    QString chip_style = "StatusChipIdle";
+    if (node_) {
+        const auto heartbeat_age_ms = node_->heartbeatAgeMs(uav_id);
+        if (heartbeat_age_ms.has_value() && *heartbeat_age_ms <= 3000) {
+            chip_text = QString("HB: %1 ms").arg(*heartbeat_age_ms);
+            chip_style = "StatusChipReady";
+        } else if (heartbeat_age_ms.has_value()) {
+            chip_text = QString("HB stale %1 ms").arg(*heartbeat_age_ms);
+        }
+    }
+    chip->setText(chip_text);
+    if (chip->objectName() != chip_style) {
+        chip->setObjectName(chip_style);
+        chip->style()->unpolish(chip);
+        chip->style()->polish(chip);
+    }
+}
+
+void UAVFleetGUI::updateFleetOnlineLabel() {
+    if (!ui_ || !ui_->fleetCountLabel) {
+        return;
+    }
+
+    int online_count = 0;
+    if (node_) {
+        for (int uav_id = 1; uav_id <= uav_count_; ++uav_id) {
+            const auto heartbeat_age_ms = node_->heartbeatAgeMs(uav_id);
+            if (heartbeat_age_ms.has_value() && *heartbeat_age_ms <= 3000) {
+                ++online_count;
+            }
+        }
+    }
+
+    ui_->fleetCountLabel->setText(QString("%1/%2 UAVs online").arg(online_count).arg(uav_count_));
+}
+
+void UAVFleetGUI::loadPersistentSettings() {
+    QSettings settings("UAVFleet", "UAVFleetGUI");
+    int saved_count = settings.value("fleet/uav_count", uav_count_).toInt();
+    saved_count = std::clamp(saved_count, kMinUavCount, kMaxUavCount);
+    uav_count_ = saved_count;
+    selected_uav_id_ = std::clamp(selected_uav_id_, 1, uav_count_);
+    ui_->uavCountLineEdit->setText(QString::number(uav_count_));
+}
+
+void UAVFleetGUI::savePersistentSettings() const {
+    QSettings settings("UAVFleet", "UAVFleetGUI");
+    settings.setValue("fleet/uav_count", uav_count_);
 }

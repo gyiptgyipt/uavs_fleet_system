@@ -14,6 +14,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(px4_msgs REQUIRED)
 
 # Qt5
 find_package(Qt5 REQUIRED COMPONENTS Core Widgets Network)
@@ -53,6 +54,7 @@ ament_target_dependencies(uav_gui
   rclcpp
   std_msgs
   geometry_msgs
+  px4_msgs
 )
 
 install(TARGETS
@@ -62,6 +64,11 @@ install(TARGETS
 
 install(DIRECTORY
   config
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+  launch
   DESTINATION share/${PROJECT_NAME}
 )
 

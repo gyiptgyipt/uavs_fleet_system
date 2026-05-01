@@ -6,14 +6,13 @@
 
 int main(int argc, char *argv[]) {
     rclcpp::init(argc, argv);
+    auto node = std::make_shared<UAVControlNode>();
 
     QApplication app(argc, argv);
-
     UAVFleetGUI gui;
+    gui.setControlNode(node.get());
 
-    // Start ROS2 node in a separate thread
-    QThread* ros_thread = QThread::create([]() {
-        auto node = std::make_shared<UAVControlNode>();
+    QThread* ros_thread = QThread::create([node]() {
         rclcpp::spin(node);
     });
     ros_thread->start();

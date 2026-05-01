@@ -38,13 +38,13 @@ class UAVFleetGUI : public QMainWindow {
 public:
     explicit UAVFleetGUI(QWidget *parent = nullptr);
     ~UAVFleetGUI();
+    void setControlNode(UAVControlNode* node);
 
 private slots:
     void startSimulation();
     void armUAVs();
     void sendSetpoints();
-    void setupUAVs();
-    void removeUAV();
+    void applyUavCountFromInput();
     void startMission();
     void clearLogs();
     void saveLogs();
@@ -52,6 +52,7 @@ private slots:
     void updateOutput(const QString& text);
 
 private:
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void setupUI();
     void setupMissionPage();
     void openMissionDialog();
@@ -61,6 +62,11 @@ private:
     QPointF uavCoordinate(int uav_id) const;
     void requestMapPreview(QPushButton* map_button, int uav_id);
     void selectUAV(int uav_id);
+    void refreshHeartbeatIndicators();
+    void updateHeartbeatChip(QLabel* chip, int uav_id);
+    void updateFleetOnlineLabel();
+    void loadPersistentSettings();
+    void savePersistentSettings() const;
 
     Ui::UAVFleetGUI* ui_;
     GISMapWidget* interactive_map_;
@@ -73,6 +79,7 @@ private:
     QTimer* telemetry_timer_;
     QNetworkAccessManager* map_network_manager_;
     QHash<int, QPixmap> map_preview_cache_;
+    QHash<int, QLabel*> heartbeat_chip_labels_;
 
     QStackedWidget* stack_widget_;
     QWidget* main_page_;

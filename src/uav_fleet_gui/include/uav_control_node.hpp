@@ -17,6 +17,7 @@
 class UAVControlNode : public rclcpp::Node {
 public:
     UAVControlNode();
+    void configureFleetParticipants(int uav_count);
     void armVehicle(int vehicle_id);
     void sendSetpoint(int vehicle_id, double x, double y, double z, double yaw);
     void trackHeartbeat(int vehicle_id);

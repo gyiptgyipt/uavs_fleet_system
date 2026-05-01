@@ -287,7 +287,7 @@ SITE:STRING=pop-os
 TinyXML2_DIR:PATH=TinyXML2_DIR-NOTFOUND
 
 //Path to a library.
-_lib:FILEPATH=/home/zyme/ros2_ws/uav_fleet_system/uavs_fleet_system/install/px4_msgs/lib/libpx4_msgs__rosidl_typesupport_fastrtps_cpp.so
+_lib:FILEPATH=/opt/ros/humble/lib/libgeometry_msgs__rosidl_typesupport_fastrtps_cpp.so
 
 //The directory containing a CMake configuration file for ament_cmake.
 ament_cmake_DIR:PATH=/opt/ros/humble/share/ament_cmake/cmake
@@ -389,7 +389,7 @@ pkgcfg_lib__OPENSSL_crypto:FILEPATH=/usr/lib/x86_64-linux-gnu/libcrypto.so
 pkgcfg_lib__OPENSSL_ssl:FILEPATH=/usr/lib/x86_64-linux-gnu/libssl.so
 
 //The directory containing a CMake configuration file for px4_msgs.
-px4_msgs_DIR:PATH=/home/zyme/ros2_ws/uav_fleet_system/uavs_fleet_system/install/px4_msgs/share/px4_msgs/cmake
+px4_msgs_DIR:PATH=px4_msgs_DIR-NOTFOUND
 
 //The directory containing a CMake configuration file for rcl.
 rcl_DIR:PATH=/opt/ros/humble/share/rcl/cmake

@@ -1,14 +1,13 @@
 #include "uav_control_node.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <string>
 
 UAVControlNode::UAVControlNode()
     : Node("uav_control_node") {
-    ensurePublishers(1);
-    ensureHeartbeatSubscription(1);
-    setpoint_stream_enabled_[1] = false;
+    configureFleetParticipants(1);
 
     setpoint_timer_ = this->create_wall_timer(
         std::chrono::milliseconds(100),
@@ -21,6 +20,17 @@ UAVControlNode::UAVControlNode()
         });
 
     RCLCPP_INFO(this->get_logger(), "UAV Control Node started with PX4 message publishers");
+}
+
+void UAVControlNode::configureFleetParticipants(int uav_count) {
+    const int bounded_count = std::max(1, uav_count);
+    for (int uav_id = 1; uav_id <= bounded_count; ++uav_id) {
+        ensurePublishers(uav_id);
+        ensureHeartbeatSubscription(uav_id);
+        if (setpoint_stream_enabled_.count(uav_id) == 0) {
+            setpoint_stream_enabled_[uav_id] = false;
+        }
+    }
 }
 
 void UAVControlNode::armVehicle(int vehicle_id) {

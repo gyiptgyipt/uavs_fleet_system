@@ -83,9 +83,7 @@ void UAVFleetGUI::setControlNode(UAVControlNode* node) {
     if (!node_) {
         return;
     }
-    for (int uav_id = 1; uav_id <= uav_count_; ++uav_id) {
-        node_->trackHeartbeat(uav_id);
-    }
+    node_->configureFleetParticipants(uav_count_);
     refreshHeartbeatIndicators();
 }
 
@@ -505,9 +503,6 @@ void UAVFleetGUI::populateUAVGrid() {
     const int columns = std::max(1, std::min(kUavBoardColumns, uav_count_));
     const int rows = (uav_count_ + columns - 1) / columns;
     for (int i = 0; i < uav_count_; ++i) {
-        if (node_) {
-            node_->trackHeartbeat(i + 1);
-        }
         QWidget* card = createUAVCard(i + 1);
         uav_grid_layout_->addWidget(card, i / columns, i % columns);
     }
@@ -829,9 +824,7 @@ void UAVFleetGUI::applyUavCountFromInput() {
     }
 
     if (node_) {
-        for (int uav_id = 1; uav_id <= uav_count_; ++uav_id) {
-            node_->trackHeartbeat(uav_id);
-        }
+        node_->configureFleetParticipants(uav_count_);
     }
 
     populateUAVGrid();

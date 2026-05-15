@@ -62,6 +62,7 @@ private:
     QPointF uavCoordinate(int uav_id) const;
     void requestMapPreview(QPushButton* map_button, int uav_id);
     void selectUAV(int uav_id);
+    void sendSelectedUavToMapPoint(double latitude, double longitude, double altitude_m);
     void refreshHeartbeatIndicators();
     void updateHeartbeatChip(QLabel* chip, int uav_id);
     void updateFleetOnlineLabel();
@@ -89,6 +90,10 @@ private:
 
     int selected_uav_id_;
     int uav_count_;
+    bool mission_arm_requested_;
+    bool has_mission_target_;
+    double mission_target_latitude_;
+    double mission_target_longitude_;
 };
 
 #endif // UAV_FLEET_GUI_MAINWINDOW_HPP

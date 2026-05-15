@@ -8,7 +8,7 @@ windows:
   - Simulation:
       root: ~/
       panes:
-      - clear && source ~/.bashrc; cd /home/zyme/PX4-Autopilot/Tools/simulation/gazebo-classic; ./sitl_multiple_run.sh
+      - clear && source ~/.bashrc; cd /home/zyme/PX4-Autopilot/Tools/simulation/gazebo-classic; ./sitl_multiple_run.sh -n 20
 
   - QGroundControl:
       root: ~/

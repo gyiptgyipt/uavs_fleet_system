@@ -12,7 +12,8 @@ GISMapWidget::GISMapWidget(QWidget* parent)
       center_latitude_(22.48),
       center_longitude_(94.94),
       zoom_level_(8),
-      dragging_(false) {
+      dragging_(false),
+      drag_moved_(false) {
     setMinimumHeight(120);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     setMouseTracking(true);
@@ -118,7 +119,9 @@ void GISMapWidget::wheelEvent(QWheelEvent* event) {
 void GISMapWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         dragging_ = true;
+        drag_moved_ = false;
         last_mouse_pos_ = event->pos();
+        mouse_press_pos_ = event->pos();
         setCursor(Qt::ClosedHandCursor);
         event->accept();
         return;
@@ -134,6 +137,9 @@ void GISMapWidget::mouseMoveEvent(QMouseEvent* event) {
 
     const QPoint delta = event->pos() - last_mouse_pos_;
     last_mouse_pos_ = event->pos();
+    if ((event->pos() - mouse_press_pos_).manhattanLength() > 4) {
+        drag_moved_ = true;
+    }
 
     const double world_x = worldXFromLongitude(center_longitude_, zoom_level_) - delta.x();
     const double world_y = worldYFromLatitude(center_latitude_, zoom_level_) - delta.y();
@@ -145,7 +151,17 @@ void GISMapWidget::mouseMoveEvent(QMouseEvent* event) {
 
 void GISMapWidget::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
+        if (!drag_moved_) {
+            const double center_world_x = worldXFromLongitude(center_longitude_, zoom_level_);
+            const double center_world_y = worldYFromLatitude(center_latitude_, zoom_level_);
+            const double clicked_world_x = center_world_x + event->pos().x() - (width() / 2.0);
+            const double clicked_world_y = center_world_y + event->pos().y() - (height() / 2.0);
+            const double clicked_latitude = latitudeFromWorldY(clicked_world_y, zoom_level_);
+            const double clicked_longitude = longitudeFromWorldX(clicked_world_x, zoom_level_);
+            emit mapClicked(clicked_latitude, clicked_longitude);
+        }
         dragging_ = false;
+        drag_moved_ = false;
         unsetCursor();
         event->accept();
         return;

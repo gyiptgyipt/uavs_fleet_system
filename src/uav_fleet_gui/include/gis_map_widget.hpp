@@ -21,6 +21,9 @@ public:
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
 
+signals:
+    void mapClicked(double latitude, double longitude);
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
@@ -45,7 +48,9 @@ private:
     int zoom_level_;
 
     bool dragging_;
+    bool drag_moved_;
     QPoint last_mouse_pos_;
+    QPoint mouse_press_pos_;
 };
 
 #endif // UAV_FLEET_GUI_GIS_MAP_WIDGET_HPP

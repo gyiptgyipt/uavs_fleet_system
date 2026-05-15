@@ -27,6 +27,7 @@
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 namespace {
 constexpr int kUavBoardColumns = 3;
@@ -62,7 +63,11 @@ UAVFleetGUI::UAVFleetGUI(QWidget *parent)
       mission_title_label_(nullptr),
       mission_map_(nullptr),
       selected_uav_id_(1),
-      uav_count_(10) {
+      uav_count_(10),
+      mission_arm_requested_(false),
+      has_mission_target_(false),
+      mission_target_latitude_(0.0),
+      mission_target_longitude_(0.0) {
     setupUI();
 
     telemetry_timer_ = new QTimer(this);
@@ -457,10 +462,12 @@ void UAVFleetGUI::setupMissionPage() {
     QVBoxLayout* buttons_layout = new QVBoxLayout;
     buttons_layout->setSpacing(12);
     QPushButton* arm_button = new QPushButton("Arm", bottom_frame);
+    QPushButton* go_to_point_button = new QPushButton("Go To Point", bottom_frame);
     QPushButton* force_disarm_button = new QPushButton("Force Disarm", bottom_frame);
     QPushButton* land_button = new QPushButton("Land", bottom_frame);
     QPushButton* disarm_button = new QPushButton("Disarm", bottom_frame);
     buttons_layout->addWidget(arm_button);
+    buttons_layout->addWidget(go_to_point_button);
     buttons_layout->addWidget(force_disarm_button);
     buttons_layout->addWidget(land_button);
     buttons_layout->addWidget(disarm_button);
@@ -477,8 +484,31 @@ void UAVFleetGUI::setupMissionPage() {
     connect(altitude_slider, &QSlider::valueChanged, this, [altitude_label](int value) {
         altitude_label->setText(QString("Altitude (%1 m)").arg(value));
     });
+    connect(mission_map, &GISMapWidget::mapClicked, this, [this, status_label](double latitude, double longitude) {
+        has_mission_target_ = true;
+        mission_target_latitude_ = latitude;
+        mission_target_longitude_ = longitude;
+        status_label->setText(QString("target: %1, %2")
+            .arg(latitude, 0, 'f', 6)
+            .arg(longitude, 0, 'f', 6));
+        updateOutput(QString("Map target selected for UAV %1. Press Go To Point to fly there.")
+            .arg(selected_uav_id_));
+    });
     connect(arm_button, &QPushButton::clicked, this, [this]() {
-        updateOutput(QString("Arm command sent to UAV %1 from mission overlay.").arg(selected_uav_id_));
+        armUAVs();
+        mission_arm_requested_ = true;
+    });
+    connect(go_to_point_button, &QPushButton::clicked, this, [this, altitude_slider]() {
+        if (!mission_arm_requested_) {
+            updateOutput(QString("Press Arm before sending UAV %1 to the map point.").arg(selected_uav_id_));
+            return;
+        }
+        if (!has_mission_target_) {
+            updateOutput("Click a map point before pressing Go To Point.");
+            return;
+        }
+        const double altitude_m = static_cast<double>(altitude_slider->value());
+        sendSelectedUavToMapPoint(mission_target_latitude_, mission_target_longitude_, altitude_m);
     });
     connect(disarm_button, &QPushButton::clicked, this, [this]() {
         updateOutput(QString("Disarm command sent to UAV %1 from mission overlay.").arg(selected_uav_id_));
@@ -759,6 +789,8 @@ void UAVFleetGUI::openMissionDialog() {
     if (!mission_page_) {
         setupMissionPage();
     }
+    mission_arm_requested_ = false;
+    has_mission_target_ = false;
     mission_title_label_->setText(QString("Drone %1 Mission").arg(selected_uav_id_));
     mission_map_->setCenterCoordinate(uavCoordinate(selected_uav_id_).x(), uavCoordinate(selected_uav_id_).y());
     stack_widget_->setCurrentWidget(mission_page_);
@@ -801,6 +833,36 @@ void UAVFleetGUI::sendSetpoints() {
         .arg(QString::number(coordinate.x(), 'f', 2))
         .arg(QString::number(coordinate.y(), 'f', 2))
         .arg(QString::number(px4_z, 'f', 2)));
+}
+
+void UAVFleetGUI::sendSelectedUavToMapPoint(double latitude, double longitude, double altitude_m) {
+    if (!node_) {
+        updateOutput("Control node not available yet. Start ROS and try again.");
+        return;
+    }
+
+    const double commanded_altitude = altitude_m > 0.0 ? altitude_m : 10.0;
+
+    std::string error_message;
+    const bool sent = node_->sendGeoSetpoint(
+        selected_uav_id_,
+        latitude,
+        longitude,
+        commanded_altitude,
+        &error_message);
+
+    if (!sent) {
+        updateOutput(QString("Map target was not sent to UAV %1 yet: %2")
+            .arg(selected_uav_id_)
+            .arg(QString::fromStdString(error_message)));
+        return;
+    }
+
+    updateOutput(QString("UAV %1 sent to map point: lat=%2 lon=%3 alt=%4 m")
+        .arg(selected_uav_id_)
+        .arg(latitude, 0, 'f', 6)
+        .arg(longitude, 0, 'f', 6)
+        .arg(commanded_altitude, 0, 'f', 1));
 }
 
 void UAVFleetGUI::applyUavCountFromInput() {

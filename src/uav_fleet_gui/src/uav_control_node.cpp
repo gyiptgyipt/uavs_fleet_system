@@ -27,6 +27,7 @@ void UAVControlNode::configureFleetParticipants(int uav_count) {
     for (int uav_id = 1; uav_id <= bounded_count; ++uav_id) {
         ensurePublishers(uav_id);
         ensureHeartbeatSubscription(uav_id);
+        ensurePositionSubscriptions(uav_id);
         if (setpoint_stream_enabled_.count(uav_id) == 0) {
             setpoint_stream_enabled_[uav_id] = false;
         }
@@ -48,12 +49,6 @@ void UAVControlNode::sendSetpoint(int vehicle_id, double x, double y, double z, 
     ensurePublishers(vehicle_id);
     ensureHeartbeatSubscription(vehicle_id);
 
-    publishVehicleCommand(
-        vehicle_id,
-        px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE,
-        1.0f,
-        6.0f);
-
     setpoint_cache_[vehicle_id] = {
         static_cast<float>(x),
         static_cast<float>(y),
@@ -62,6 +57,11 @@ void UAVControlNode::sendSetpoint(int vehicle_id, double x, double y, double z, 
     };
     setpoint_stream_enabled_[vehicle_id] = true;
     publishOffboardAndSetpoint(vehicle_id);
+    publishVehicleCommand(
+        vehicle_id,
+        px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE,
+        1.0f,
+        6.0f);
 
     RCLCPP_INFO(
         this->get_logger(),
@@ -71,6 +71,53 @@ void UAVControlNode::sendSetpoint(int vehicle_id, double x, double y, double z, 
         y,
         z,
         yaw);
+}
+
+bool UAVControlNode::sendGeoSetpoint(
+    int vehicle_id,
+    double latitude,
+    double longitude,
+    double altitude_m,
+    std::string* error_message) {
+    ensurePublishers(vehicle_id);
+    ensureHeartbeatSubscription(vehicle_id);
+    ensurePositionSubscriptions(vehicle_id);
+
+    px4_msgs::msg::VehicleGlobalPosition global_position;
+    px4_msgs::msg::VehicleLocalPosition local_position;
+    {
+        std::lock_guard<std::mutex> lock(position_mutex_);
+        const auto global_it = last_global_position_.find(vehicle_id);
+        const auto local_it = last_local_position_.find(vehicle_id);
+        if (global_it == last_global_position_.end() || local_it == last_local_position_.end()) {
+            if (error_message) {
+                *error_message = "waiting for GPS and local position from PX4";
+            }
+            return false;
+        }
+        global_position = global_it->second;
+        local_position = local_it->second;
+    }
+
+    double current_latitude = static_cast<double>(global_position.lat);
+    double current_longitude = static_cast<double>(global_position.lon);
+    if (std::abs(current_latitude) > 180.0 || std::abs(current_longitude) > 180.0) {
+        current_latitude /= 1e7;
+        current_longitude /= 1e7;
+    }
+
+    const double earth_radius_m = 6378137.0;
+    const double dlat = (latitude - current_latitude) * M_PI / 180.0;
+    const double dlon = (longitude - current_longitude) * M_PI / 180.0;
+    const double mean_latitude = ((latitude + current_latitude) / 2.0) * M_PI / 180.0;
+    const double east = earth_radius_m * dlon * std::cos(mean_latitude);
+    const double north = earth_radius_m * dlat;
+
+    const double target_x = static_cast<double>(local_position.x) + north;
+    const double target_y = static_cast<double>(local_position.y) + east;
+    const double target_z = -std::abs(altitude_m);
+    sendSetpoint(vehicle_id, target_x, target_y, target_z, 0.0);
+    return true;
 }
 
 void UAVControlNode::ensurePublishers(int vehicle_id) {
@@ -124,6 +171,44 @@ void UAVControlNode::ensureHeartbeatSubscription(int vehicle_id) {
         "Tracking heartbeat for UAV %d on topic %s",
         vehicle_id,
         topic.c_str());
+}
+
+void UAVControlNode::ensurePositionSubscriptions(int vehicle_id) {
+    if (vehicle_global_position_subscriptions_.count(vehicle_id) == 0) {
+        const std::string topic = topicPrefixOut(vehicle_id) + "/vehicle_global_position";
+        vehicle_global_position_subscriptions_[vehicle_id] =
+            this->create_subscription<px4_msgs::msg::VehicleGlobalPosition>(
+                topic,
+                10,
+                [this, vehicle_id](const px4_msgs::msg::VehicleGlobalPosition::SharedPtr msg) {
+                    std::lock_guard<std::mutex> lock(position_mutex_);
+                    last_global_position_[vehicle_id] = *msg;
+                });
+
+        RCLCPP_INFO(
+            this->get_logger(),
+            "Tracking global position for UAV %d on topic %s",
+            vehicle_id,
+            topic.c_str());
+    }
+
+    if (vehicle_local_position_subscriptions_.count(vehicle_id) == 0) {
+        const std::string topic = topicPrefixOut(vehicle_id) + "/vehicle_local_position";
+        vehicle_local_position_subscriptions_[vehicle_id] =
+            this->create_subscription<px4_msgs::msg::VehicleLocalPosition>(
+                topic,
+                10,
+                [this, vehicle_id](const px4_msgs::msg::VehicleLocalPosition::SharedPtr msg) {
+                    std::lock_guard<std::mutex> lock(position_mutex_);
+                    last_local_position_[vehicle_id] = *msg;
+                });
+
+        RCLCPP_INFO(
+            this->get_logger(),
+            "Tracking local position for UAV %d on topic %s",
+            vehicle_id,
+            topic.c_str());
+    }
 }
 
 void UAVControlNode::publishVehicleCommand(int vehicle_id, uint16_t command, float param1, float param2) {
